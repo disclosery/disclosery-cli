@@ -1,0 +1,23 @@
+version: 2
+project_name: disclosery
+builds:
+  - id: disclosery
+    main: ./cmd/disclosery
+    binary: disclosery
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath, -buildvcs=false]
+    ldflags: ["-s -w -X main.version={{.Version}}"]
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md, LICENSE, THIRD_PARTY_NOTICES.md]
+checksum:
+  name_template: checksums.txt
+release:
+  disable: true
+# Release upload remains disabled here; owner-reviewed manual workflow publishes approved tags.

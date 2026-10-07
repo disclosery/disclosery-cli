@@ -1,0 +1,6 @@
+/dist/
+/.devcache/
+*.exe
+.env
+config.json
+*.cursor

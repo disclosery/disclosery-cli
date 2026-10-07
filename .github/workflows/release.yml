@@ -1,0 +1,56 @@
+name: Reviewed release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Reviewed release version (e.g. 0.1.0)
+        required: true
+        default: 0.1.0
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+      - name: Validate version and run bounded offline checks
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          printf '%s\n' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          RELEASE_VERSION="$RELEASE_VERSION" sh scripts/check.sh
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Build the reviewed workflow commit with resource caps
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          printf '%s\n' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          LOCAL_RELEASE=1 RELEASE_VERSION="$RELEASE_VERSION" sh scripts/check.sh
+      - name: Publish new immutable release and version tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          REVIEWED_COMMIT: ${{ github.sha }}
+        run: |
+          printf '%s\n' "$RELEASE_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          release_tag="v$RELEASE_VERSION"
+          if gh release view "$release_tag" >/dev/null 2>&1; then
+            echo "Release exists: publish a new version rather than replace assets" >&2
+            exit 1
+          fi
+          if git show-ref --verify --quiet "refs/tags/$release_tag"; then
+            test "$(git rev-list -n 1 "$release_tag")" = "$REVIEWED_COMMIT"
+          fi
+          gh release create "$release_tag" --target "$REVIEWED_COMMIT" --title "$release_tag" --notes-file CHANGELOG.md dist/*.tar.gz dist/*.zip dist/checksums.txt
